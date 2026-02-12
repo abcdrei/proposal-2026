@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --dim: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+      --amber: #d29922;
+      --blue: #58a6ff;
+      --cursor: #3fb950;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow: hidden;
+      background-image:
+        linear-gradient(rgba(48, 54, 61, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(48, 54, 61, 0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .scanline {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        to bottom,
+        transparent 50%,
+        rgba(0, 0, 0, 0.02) 50%
+      );
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .terminal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+    }
+
+    .terminal-header {
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.3);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .terminal-dot.red { background: #ff5f56; }
+    .terminal-dot.yellow { background: #ffbd2e; }
+    .terminal-dot.green { background: #27c93f; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+      color: var(--dim);
+    }
+
+    .terminal-body {
+      padding: 20px 24px 24px;
+      min-height: 280px;
+    }
+
+    .line {
+      margin-bottom: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .line.prompt::before {
+      content: '> ';
+      color: var(--green);
+    }
+
+    .line.output {
+      color: var(--dim);
+    }
+
+    .line.success {
+      color: var(--green);
+    }
+
+    .line.error {
+      color: var(--red);
+    }
+
+    .line.highlight {
+      color: var(--amber);
+    }
+
+    .line.romantic {
+      color: #ff7eb9;
+      font-weight: 600;
+    }
+
+    .line.dim {
+      color: var(--dim);
+    }
+
+    .line.fade-out {
+      opacity: 0;
+      transform: translateY(-2px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .input-prefix {
+      color: var(--green);
+      font-size: 14px;
+    }
+
+    .input-field {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      caret-color: var(--green);
+    }
+
+    .input-field::placeholder {
+      color: var(--dim);
+    }
+
+    .cursor-blink {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: var(--cursor);
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .typed {
+      border-right: 2px solid var(--green);
+      animation: blink 1s step-end infinite;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .glitch {
+      position: relative;
+    }
+
+    .glitch::before,
+    .glitch::after {
+      content: attr(data-text);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .glitch::before {
+      color: var(--red);
+      animation: glitch-1 0.3s infinite;
+      clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+    }
+
+    .glitch::after {
+      color: var(--blue);
+      animation: glitch-2 0.3s infinite;
+      clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+    }
+
+    @keyframes glitch-1 {
+      0% { transform: translate(0); }
+      20% { transform: translate(-2px, 2px); }
+      40% { transform: translate(2px, -2px); }
+      60% { transform: translate(-2px, -2px); }
+      80% { transform: translate(2px, 2px); }
+      100% { transform: translate(0); }
+    }
+
+    @keyframes glitch-2 {
+      0% { transform: translate(0); }
+      20% { transform: translate(2px, -2px); }
+      40% { transform: translate(-2px, 2px); }
+      60% { transform: translate(2px, 2px); }
+      80% { transform: translate(-2px, -2px); }
+      100% { transform: translate(0); }
+    }
+
+    .matrix-rain {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.06;
+    }
+
+    .heart-float {
+      position: fixed;
+      font-size: 24px;
+      opacity: 0.15;
+      animation: float 6s ease-in-out infinite;
+      z-index: 0;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(10deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="scanline"></div>
+  <div class="container">
+    <div class="terminal">
+      <div class="terminal-header">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">proposal.exe — bash</span>
+      </div>
+      <div class="terminal-body">
+        <div id="output"></div>
+        <div id="input-area" class="input-row">
+          <span class="input-prefix">$</span>
+          <input
+            type="text"
+            id="user-input"
+            class="input-field"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder=""
+          />
+          <span class="cursor-blink"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== CUSTOMIZE YOUR PROPOSAL HERE ==========
+    const CONFIG = {
+      date: 'February 14, 2026',
+      time: '4:00 PM',
+      place: 'Surprise :D',
+      message: 'Wear your cute outfit and prettiest smile. See you there.'
+    };
+    // ==================================================
+
+    const output = document.getElementById('output');
+    const inputEl = document.getElementById('user-input');
+    const inputArea = document.getElementById('input-area');
+
+    function addLine(text, className = '') {
+      const div = document.createElement('div');
+      div.className = 'line ' + className;
+      div.textContent = text;
+      output.appendChild(div);
+      output.scrollTop = output.scrollHeight;
+      return div;
+    }
+
+    function addPromptLine(text) {
+      return addLine(text, 'prompt');
+    }
+
+    function typeWriter(el, text, speed = 40, callback) {
+      let i = 0;
+      el.textContent = '';
+      el.classList.add('typed');
+      function type() {
+        if (i < text.length) {
+          el.textContent += text[i];
+          i++;
+          output.scrollTop = output.scrollHeight;
+          setTimeout(type, speed);
+        } else {
+          el.classList.remove('typed');
+          if (callback) callback();
+        }
+      }
+      type();
+    }
+
+    const RANDOM_CHARS = '01ABCDEF<>[]{}!@#$%&*';
+
+    function randomString(len) {
+      let s = '';
+      for (let j = 0; j < len; j++) s += RANDOM_CHARS[Math.floor(Math.random() * RANDOM_CHARS.length)];
+      return s;
+    }
+
+    function hackerLines(count, callback) {
+      const createdLines = [];
+      let done = 0;
+      for (let i = 0; i < count; i++) {
+        setTimeout(() => {
+          const line = document.createElement('div');
+          line.className = 'line output';
+          line.textContent = randomString(20 + Math.floor(Math.random() * 40));
+          output.appendChild(line);
+          createdLines.push(line);
+          output.scrollTop = output.scrollHeight;
+          done++;
+          if (done === count && callback) callback(createdLines);
+        }, 70 + i * 50);
+      }
+    }
+
+    function decipherToText(lineEl, targetText, charDelay, callback) {
+      const len = targetText.length;
+      let i = 0;
+      function step() {
+        if (i <= len) {
+          const decoded = targetText.substring(0, i);
+          const rest = i < len ? randomString(len - i) : '';
+          lineEl.textContent = decoded + rest;
+          output.scrollTop = output.scrollHeight;
+          i++;
+          setTimeout(step, charDelay);
+        } else {
+          lineEl.textContent = targetText;
+          if (callback) callback();
+        }
+      }
+      step();
+    }
+
+    function setInputPlaceholder(placeholder) {
+      inputEl.placeholder = placeholder;
+    }
+
+    function clearOutput() {
+      output.innerHTML = '';
+    }
+
+    function focusInput() {
+      inputEl.value = '';
+      inputEl.focus();
+    }
+
+    let state = 'start';
+
+    function runProposalExe(callback) {
+      addPromptLine('proposal.exe');
+      hackerLines(8, (hackerLineEls) => {
+        const decodeLine = hackerLineEls[hackerLineEls.length - 1];
+        const others = hackerLineEls.slice(0, -1);
+        others.forEach(el => el.classList.add('fade-out'));
+        decodeLine.textContent = randomString('Initializing...'.length);
+
+        setTimeout(() => {
+          others.forEach(el => el.remove());
+          decipherToText(decodeLine, 'Initializing...', 50, () => {
+            setTimeout(() => {
+              decipherToText(decodeLine, 'Decrypting feelings module...', 40, () => {
+                setTimeout(() => {
+                  decipherToText(decodeLine, 'Loading romance.exe...', 40, () => {
+                    setTimeout(() => {
+                      decipherToText(decodeLine, '✓ Ready.', 45, () => {
+                        decodeLine.className = 'line success';
+                        if (callback) setTimeout(callback, 800);
+                      });
+                    }, 420);
+                  });
+                }, 420);
+              });
+            }, 420);
+          });
+        }, 380);
+      });
+    }
+
+    function askValentine(callback) {
+      const lineEl = addLine('', 'romantic');
+      const fullText = 'Will you be my Valentine?';
+      lineEl.textContent = randomString(fullText.length);
+      decipherToText(lineEl, fullText, 70, () => {
+        addLine('', 'line');
+        addLine('[y] Yes  [n] No', 'dim');
+        setInputPlaceholder('y / n');
+        state = 'valentine_choice';
+        focusInput();
+        if (callback) callback();
+      });
+    }
+
+    function showSuccess() {
+      clearOutput();
+      addPromptLine('proposal.exe --accept');
+      hackerLines(6, (hackerLineEls) => {
+        const decodeLine = hackerLineEls[hackerLineEls.length - 1];
+        const others = hackerLineEls.slice(0, -1);
+        others.forEach(el => el.classList.add('fade-out'));
+        decodeLine.textContent = randomString('Processing response...'.length);
+
+        setTimeout(() => {
+          others.forEach(el => el.remove());
+          decipherToText(decodeLine, 'Processing response...', 40, () => {
+            setTimeout(() => {
+              decodeLine.className = 'line output';
+              decipherToText(decodeLine, '✓ Accepted.', 45, () => {
+                decodeLine.className = 'line success';
+                setTimeout(() => {
+                  addLine('', 'line');
+                  addLine('═══════════════════════════════════', 'highlight');
+                  const dateLine = addLine('', 'romantic');
+                  dateLine.textContent = randomString(('  📅 ' + CONFIG.date).length);
+                  decipherToText(dateLine, '  📅 ' + CONFIG.date, 35, () => {
+                    const timeLine = addLine('', 'romantic');
+                    timeLine.textContent = randomString(('  🕐 ' + CONFIG.time).length);
+                    decipherToText(timeLine, '  🕐 ' + CONFIG.time, 35, () => {
+                      const placeLine = addLine('', 'romantic');
+                      placeLine.textContent = randomString(('  📍 ' + CONFIG.place).length);
+                      decipherToText(placeLine, '  📍 ' + CONFIG.place, 35, () => {
+                        addLine('═══════════════════════════════════', 'highlight');
+                        addLine('', 'line');
+                        const msgEl = addLine('', 'romantic');
+                        msgEl.textContent = randomString(CONFIG.message.length);
+                        decipherToText(msgEl, CONFIG.message, 40, () => {
+                          const closingText = 'I love you. ❤️';
+                          if (CONFIG.message !== closingText) {
+                            addLine('', 'line');
+                            const closingLine = addLine('', 'success');
+                            closingLine.textContent = randomString(closingText.length);
+                            decipherToText(closingLine, closingText, 45, () => {
+                              inputArea.classList.add('hidden');
+                            });
+                          } else {
+                            inputArea.classList.add('hidden');
+                          }
+                        });
+                      });
+                    });
+                  });
+                }, 550);
+              });
+            }, 420);
+          });
+        }, 380);
+      });
+    }
+
+    function showRejected() {
+      addLine('', 'line');
+      const errEl = addLine('', 'error');
+      errEl.textContent = randomString('ERR_ACCESS_DENIED'.length);
+      decipherToText(errEl, 'ERR_ACCESS_DENIED', 50, () => {
+        errEl.setAttribute('data-text', 'ERR_ACCESS_DENIED');
+        errEl.classList.add('glitch');
+        const line2 = addLine('', 'error');
+        line2.textContent = randomString('Permission denied. Retrying...'.length);
+        decipherToText(line2, 'Permission denied. Retrying...', 40, () => {
+          hackerLines(12, (hackerLineEls) => {
+            const decodeLine = hackerLineEls[hackerLineEls.length - 1];
+            const others = hackerLineEls.slice(0, -1);
+            others.forEach(el => el.classList.add('fade-out'));
+            decodeLine.textContent = randomString('SYSTEM OVERRIDE: Request "n" is not valid for this executable.'.length);
+
+            setTimeout(() => {
+              others.forEach(el => el.remove());
+              decipherToText(decodeLine, 'SYSTEM OVERRIDE: Request "n" is not valid for this executable.', 35, () => {
+                decodeLine.className = 'line highlight';
+                setTimeout(() => {
+                  const romanticLine = addLine('', 'romantic');
+                  romanticLine.textContent = randomString('Please type "y" to accept. 💕'.length);
+                  decipherToText(romanticLine, 'Please type "y" to accept. 💕', 45, () => {
+                    setInputPlaceholder('y / n');
+                    focusInput();
+                  });
+                }, 420);
+              });
+            }, 380);
+          });
+        });
+      });
+    }
+
+    function init() {
+      addLine('Run proposal.exe?', 'prompt');
+      setInputPlaceholder('Type "run" or "start" to begin');
+      state = 'start';
+      focusInput();
+    }
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const raw = inputEl.value.trim().toLowerCase();
+      const val = raw || inputEl.placeholder.toLowerCase();
+
+      if (state === 'start') {
+        if (raw === 'run' || raw === 'start' || raw === 'proposal.exe' || raw === 'y' || raw === 'yes') {
+          clearOutput();
+          addPromptLine((raw === 'proposal.exe' ? raw : (raw || 'run') + ' proposal.exe'));
+          runProposalExe(() => {
+            addLine('', 'line');
+            askValentine();
+          });
+        } else {
+          addPromptLine(raw || '(empty)');
+          addLine('Unknown command. Try: run', 'dim');
+          addLine('Run proposal.exe?', 'prompt');
+          focusInput();
+        }
+        return;
+      }
+
+      if (state === 'valentine_choice') {
+        addPromptLine(raw);
+        if (raw === 'y' || raw === 'yes') {
+          showSuccess();
+        } else if (raw === 'n' || raw === 'no') {
+          showRejected();
+        } else {
+          addLine('Invalid input. Type y or n', 'error');
+          setInputPlaceholder('y / n');
+          focusInput();
+        }
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
